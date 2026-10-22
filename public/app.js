@@ -1,0 +1,16 @@
+const $=id=>document.getElementById(id);
+const states='AC Acre|AL Alagoas|AP Amapá|AM Amazonas|BA Bahia|CE Ceará|DF Distrito Federal|ES Espírito Santo|GO Goiás|MA Maranhão|MT Mato Grosso|MS Mato Grosso do Sul|MG Minas Gerais|PA Pará|PB Paraíba|PR Paraná|PE Pernambuco|PI Piauí|RJ Rio de Janeiro|RN Rio Grande do Norte|RS Rio Grande do Sul|RO Rondônia|RR Roraima|SC Santa Catarina|SP São Paulo|SE Sergipe|TO Tocantins';
+for(const state of states.split('|')){const option=document.createElement('option');option.value=state.slice(0,2);option.textContent=state.slice(3);$('state').append(option);}
+const digits=s=>s.replace(/\D/g,'');
+$('cpf').addEventListener('input',e=>{let n=digits(e.target.value).slice(0,11);e.target.value=n.replace(/^(\d{3})(\d)/,'$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/,'$1.$2.$3').replace(/(\d{3})(\d{1,2})$/,'$1-$2');e.target.setCustomValidity('');});
+$('cep').addEventListener('input',e=>{e.target.value=digits(e.target.value).slice(0,8).replace(/^(\d{5})(\d)/,'$1-$2');});
+$('phone').addEventListener('input',e=>{const n=digits(e.target.value).slice(0,11);e.target.value=n.length>10?n.replace(/^(\d{2})(\d{5})(\d*)$/,'($1) $2-$3'):n.replace(/^(\d{2})(\d{4})(\d*)$/,'($1) $2-$3');});
+let pix=null,busy=false;
+$('close').onclick=()=>$('pix-dialog').close();
+$('pix-dialog').addEventListener('click',e=>{if(e.target===$('pix-dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
+function showPix(){ $('pix-code').value=pix.code;$('qr').src=pix.qr;$('copy-status').textContent='';const date=new Date(pix.expiresAt);$('expiry').textContent=pix.expiresAt&&!isNaN(date)?'Válido até '+date.toLocaleString('pt-BR'):'';$('pix-dialog').showModal();}
+$('checkout').addEventListener('submit',async e=>{e.preventDefault();if(busy)return;if(pix){showPix();return;}busy=true;$('generate').disabled=true;$('generate').textContent='Gerando seu Pix…';$('error').hidden=true;
+try{const form=new FormData(e.target);const body=Object.fromEntries(['name','email','phone','cpf','cep','street','number','city','neighborhood','complement','state'].map(k=>[k,form.get(k)]));for(const [key,value]of new URLSearchParams(location.search))if(key.startsWith('utm_'))body[key]=value;
+const response=await fetch('/api/pix',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await response.json();if(!response.ok)throw new Error((data.message||'Não foi possível gerar o Pix.')+(data.reference?' Referência: '+data.reference:''));if(!data.code||!data.qr)throw new Error('Resposta incompleta. Consulte o suporte antes de tentar novamente.');pix=data;showPix();
+}catch(error){$('error').textContent=error instanceof TypeError?'Conexão interrompida. Confira com o suporte se houve geração antes de tentar novamente.':error.message;$('error').hidden=false;}finally{busy=false;$('generate').disabled=false;$('generate').textContent=pix?'Ver código Pix':'Gerar código QR';}});
+$('copy').onclick=async()=>{try{await navigator.clipboard.writeText(pix.code);$('copy-status').textContent='Código Pix copiado!';}catch{$('pix-code').focus();$('pix-code').select();$('copy-status').textContent='Selecione e copie o código acima.';}};
